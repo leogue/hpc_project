@@ -12,15 +12,34 @@ endif()
 
 find_package(OpenMP REQUIRED)
 
-add_executable(matrix_vector_seq 
-    ex2/matrix_vector_seq.c 
-    utils/utils.c
+
+add_executable(matrix_vector_seq
+        ex2/matrix-vector/matrix_vector_seq.c
+        utils/utils.c
 )
 
-add_executable(matrix_vector_omp 
-    ex2/matrix_vector_omp.c 
-    utils/utils.c
+add_executable(matrix_vector_omp
+        ex2/matrix-vector/matrix_vector_omp.c
+        utils/utils.c
 )
+
+add_executable(matrix_vector_mpi
+        ex2/matrix-vector/matrix_vector_mpi.c
+        utils/utils.c
+)
+
+add_executable(matrix_power_seq
+        ex2/matrix-power/matrix_power_seq.c
+        utils/utils.c
+)
+
+add_executable(matrix_power_omp
+        ex2/matrix-power/matrix_power_omp.c
+        utils/utils.c
+)
+
 
 target_link_libraries(matrix_vector_seq PRIVATE OpenMP::OpenMP_C)
 target_link_libraries(matrix_vector_omp PRIVATE OpenMP::OpenMP_C)
+target_link_libraries(matrix_power_seq PRIVATE OpenMP::OpenMP_C)
+target_link_libraries(matrix_power_omp PRIVATE OpenMP::OpenMP_C)
