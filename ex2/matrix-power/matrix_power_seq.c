@@ -218,14 +218,14 @@ int main() {
   PentaDiagMatrix *A2 = compute_square_tridiagonal(A);
   double end = get_time();
   printf("A^2 computed in %f seconds.\n", end - start);
-  log_execution_time("matrix_power2_seq.csv", "sequential", n, 1, end - start);
+  log_execution_time("matrix_power2.csv", "sequential", n, 1, end - start);
 
   printf("Computing A^3 (Sequential)...\n");
   start = get_time();
   HeptaDiagMatrix *A3 = compute_cube_tridiagonal(A, A2);
   end = get_time();
   printf("A^3 computed in %f seconds.\n", end - start);
-  log_execution_time("matrix_power3_seq.csv", "sequential", n, 1, end - start);
+  log_execution_time("matrix_power3.csv", "sequential", n, 1, end - start);
 
   // Cleanup
   free(A->main);

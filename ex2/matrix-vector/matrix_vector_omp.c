@@ -67,8 +67,7 @@ int main() {
   // int* result = omp_matrix_vector_multiplication(matrix, vec, n,
   // num_threads); double end_time = omp_get_wtime();
   //
-  // printf("OpenMP matrix vector multiplication with %d threads time: %f
-  // seconds\n", num_threads, end_time - start_time);
+  // printf("OpenMP matrix vector multiplication with %d threads time: %fseconds\n", num_threads, end_time - start_time);
   //
   // log_execution_time("matrix_vector_naive.csv", "omp", n, num_threads,
   // end_time - start_time);
@@ -98,8 +97,7 @@ int main() {
   printf(
       "OpenMP matrix vector multiplication with %d threads time: %f seconds\n",
       num_threads, end_time - start_time);
-  log_execution_time("matrix_vector_opti.csv", "omp", n, num_threads,
-                     end_time - start_time);
+  log_execution_time("matrix_vector_opti.csv", "omp", n, num_threads, end_time - start_time);
 
   free(vec);
   free(result);

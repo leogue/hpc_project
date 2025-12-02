@@ -3,6 +3,7 @@
 \usepackage[utf8]{inputenc}
 \usepackage{listings}
 \usepackage{xcolor}
+\usepackage{float}
 
 \lstset{
     basicstyle=\ttfamily\small,
@@ -147,18 +148,26 @@ for (int i = 0; i < n; i++) {
 
 \vspace{0.5cm}
 
-% create a real array in latex with the values of the matrix
 \begin{tabular}{|c|c|c|c|c|}
     \hline
     \textbf{Implementation} & \textbf{Threads} & \textbf{Time (s)} & \textbf{Observation} \\
     \hline
     Sequential & 1 & 0.000129 & Baseline \\
     OpenMP & 1 & 0.001288 & 10x Slower \\
-    OpenMP & 2 & 0.000139 & Slower than Seq \\
-    OpenMP & 4 & 0.000231 & Slower than Seq \\
-    OpenMP & 8 & 0.000226 & Slower than seq \\
+    OpenMP & 2 & 0.000309 & Slower than Seq \\
+    OpenMP & 4 & 0.000645 & Slower than Seq \\
+    OpenMP & 6 & 0.000190 & Slower than Seq \\
+    OpenMP & 8 & 0.000246 & Slower than seq \\
     \hline
 \end{tabular}
+
+
+\begin{figure}[H]
+    \centering
+    \includegraphics[width=0.8\textwidth]{img/matrix_vector_naive.png}
+    \caption{Times in function of the number of threads / procs}
+    \label{fig:omp_mpi}
+\end{figure}
 
 \vspace{0.5cm}
 
@@ -187,5 +196,180 @@ We will transition to a Compressed Tridiagonal Storage format using three 1D arr
 \end{enumerate}
 
 This method reduces space from $O(N^2)$ to $O(N)$. This allows testing $N=100,000,000$ on standard hardware.
+
+
+\subsubsection{OpenMP Parallelization with Optimized Storage}
+
+With the $ O(N) $ storage, we were able to increase the problem size to $ N = 100 000 000 $. We applied OpenMP parallelism to the optimized loop.
+
+\begin{lstlisting}[language=C]
+#pragma omp parallel for
+for (int i = 1; i < n - 1; i++) {
+  result[i] = matrix->lower[i - 1] * vec[i - 1] + 
+              matrix->main[i] * vec[i] +
+              matrix->upper[i] * vec[i + 1];
+}
+\end{lstlisting}
+
+
+\subsubsection{MPI Parallelization with Optimized Storage}
+
+We implemented MPI parallelization to distribute the workload across multiple processes. The input vectors are decomposed into chunks, and each process is responsible for calculating a specific range of indices. \newline 
+
+A critical challenge in decomposing Tridiagonal Matrix Multiplication is the dependency on neighbors:
+
+\begin{equation}
+    y[i] = L[i-1] \times x[i-1] + D[i] \times x[i] + U[i] \times x[i+1]
+\end{equation}
+
+To calculate index $i$, a process needs $x[i-1]$ and $x[i+1]$. 
+
+\begin{lstlisting}[language=C]
+// Exchange with LEFT neighbor (Rank - 1) to get x[start-1]
+if (rank > 0) {
+  MPI_Sendrecv(&local_vec[0], 1, MPI_INT, rank - 1, 0, 
+               &ghost_left, 1, MPI_INT, rank - 1, 0, MPI_COMM_WORLD, &status);
+}
+
+// Exchange with RIGHT neighbor (Rank + 1) to get x[end+1]
+if (rank < size - 1) {
+  MPI_Sendrecv(&local_vec[local_n - 1], 1, MPI_INT, rank + 1, 0, 
+               &ghost_right, 1, MPI_INT, rank + 1, 0, MPI_COMM_WORLD, &status);
+}
+\end{lstlisting}
+
+
+\subsubsection{Experimental Results with optimized storage $ (N=100,000,000) $}
+
+
+
+\begin{tabular}{|c|c|c|c|c|}
+    \hline
+    \textbf{Implementation} & \textbf{Threads} & \textbf{Time (s)} & \textbf{Speedup} \\
+    \hline
+    Sequential & 1 & 0.380672 & Baseline \\
+    OpenMP & 2 & 0.221757 & 1.7x Speedup \\
+    OpenMP & 4 & 0.119725 & 3.2x Speedup \\
+    OpenMP & 6 & 0.080580 & 4.7x Speedup \\
+    OpenMP & 8 & 0.078778 & 4.8x Speedup \\
+    MPI & 2 & 0.396344 & 0.9x Speedup \\
+    MPI & 4 & 0.279268 & 1.4x Speedup \\
+    MPI & 6 & 0.242146 & 1.6x Speedup \\
+    MPI & 8 & 0.275798 & 1.4x Speedup \\
+    \hline
+\end{tabular}
+
+\begin{figure}[H]
+    \centering
+    \includegraphics[width=0.8\textwidth]{img/matrix_vector_opti.png}
+    \caption{Times in function of the number of threads / procs}
+    \label{fig:omp_mpi}
+\end{figure}
+
+
+Contrary to OpenMP, the MPI implementation shows poor performance on a single shared-memory machine.
+
+\begin{enumerate}
+\item Communication Overhead: The operations $ MPI\_Scatterv $ and $ MPI\_Gatherv $ require Rank 0 to serialize and transmit the entire dataset (approx 1.2 GB for N=108) to other processes. In a shared-memory context, this involves expensive memory-to-memory copies that are slower than direct pointer access used in OpenMP.
+\item Computation-to-Communication Ratio: The matrix-vector product is an O(N) operation with very few arithmetic operations per byte loaded. The time saved by parallelizing the calculation is overshadowed by the time spent distributing the data.
+\end{enumerate}
+
+\subsubsection{Matrix-vector multiplication conclusion}
+
+This study demonstrates that Data Structures are the primary driver of performance in sparse linear algebra. Switching from int** to Compressed Storage was necessary to even run the benchmark.
+
+\begin{enumerate}
+\item OpenMP proved highly effective, offering a ~5x speedup on 8 threads, limited only by the physical memory bandwidth of the machine.
+\item MPI, while correctly implemented with Halo Exchanges, is not suitable for this specific workload on a single node due to the high cost of data distribution relative to the low computational intensity of the kernel. MPI would only become beneficial if the problem size N exceeded the RAM of a single machine, requiring distribution across a cluster.
+\end{enumerate}
+
+
+
+\subsection{Matrix Power}
+
+\subsubsection{Introduction}
+In this section, we extend our analysis to matrix exponentiation, specifically computing $A^2$ and $A^3$ for a tridiagonal matrix $A$.
+Unlike matrix-vector multiplication, squaring a sparse matrix increases its bandwidth.
+\begin{itemize}
+    \item If $A$ is tridiagonal (bandwidth 1), $A^2$ is pentadiagonal (bandwidth 2).
+    \item $A^3$ is heptadiagonal (bandwidth 3).
+\end{itemize}
+To maintain $O(N)$ memory complexity, we implemented custom data structures to store only the non-zero diagonals.
+
+\subsubsection{Sequential Implementation}
+We implemented specific functions to compute the diagonals of the resulting matrices directly.
+For $A^2$, the element $(A^2)_{ij}$ is given by $\sum_k A_{ik} A_{kj}$. Due to the sparsity of $A$, only a few terms in this sum are non-zero.
+
+\begin{lstlisting}[language=C]
+// Example: Computing the main diagonal of A^2
+int val = M[i] * M[i];
+if (i > 0) val += L[i - 1] * U[i - 1];
+if (i < n - 1) val += U[i] * L[i];
+R->main[i] = val;
+\end{lstlisting}
+
+For $A^3$, we compute $A^3 = A \times A^2$. This involves multiplying a tridiagonal matrix by a pentadiagonal matrix.
+
+\subsubsection{OpenMP Parallelization}
+Since the computation of each row of the result matrix is independent, we can trivially parallelize the outer loops using OpenMP.
+We used \texttt{\#pragma omp parallel for} to distribute the rows among threads.
+
+\begin{lstlisting}[language=C]
+#pragma omp parallel for
+for (int i = 0; i < n; i++) {
+    // Compute diagonals for row i
+    // ...
+}
+\end{lstlisting}
+
+\subsubsection{Experimental Results ($N=100,000,000$)}
+
+We measured the execution time for computing $A^2$ and $A^3$ with varying numbers of OpenMP threads.
+
+\textbf{Results for $A^2$:}
+
+\begin{tabular}{|c|c|c|c|}
+    \hline
+    \textbf{Implementation} & \textbf{Threads} & \textbf{Time (s)} & \textbf{Speedup} \\
+    \hline
+    Sequential & 1 & 1.239 & Baseline \\
+    OpenMP & 2 & 0.747 & 1.65x \\
+    OpenMP & 4 & 0.383 & 3.23x \\
+    OpenMP & 6 & 0.277 & 4.47x \\
+    OpenMP & 8 & 0.290 & 4.27x \\
+    \hline
+\end{tabular}
+
+\begin{figure}[H]
+    \centering
+    \includegraphics[width=0.8\textwidth]{img/matrix_power2.png}
+    \caption{Execution time for $A^2$ vs number of threads}
+    \label{fig:matrix_power2}
+\end{figure}
+
+\textbf{Results for $A^3$:}
+
+\begin{tabular}{|c|c|c|c|}
+    \hline
+    \textbf{Implementation} & \textbf{Threads} & \textbf{Time (s)} & \textbf{Speedup} \\
+    \hline
+    Sequential & 1 & 8.143 & Baseline \\
+    OpenMP & 2 & 3.939 & 2.06x \\
+    OpenMP & 4 & 2.028 & 4.01x \\
+    OpenMP & 6 & 1.469 & 5.54x \\
+    OpenMP & 8 & 1.272 & 6.40x \\
+    \hline
+\end{tabular}
+
+\begin{figure}[H]
+    \centering
+    \includegraphics[width=0.8\textwidth]{img/matrix_power3.png}
+    \caption{Execution time for $A^3$ vs number of threads}
+    \label{fig:matrix_power3}
+\end{figure}
+
+\subsubsection{Analysis}
+For $A^2$, we observe good scalability up to 6 threads. At 8 threads, performance slightly degrades, likely due to memory bandwidth saturation, as the arithmetic intensity of $A^2$ is relatively low.
+For $A^3$, which involves more arithmetic operations per element (multiplying tridiagonal by pentadiagonal), the scalability is better, achieving a 6.4x speedup on 8 threads. This suggests that the more computationally intensive the kernel, the better the parallel efficiency on this hardware.
 
 \end{document}

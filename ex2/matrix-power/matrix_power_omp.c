@@ -185,7 +185,7 @@ int main() {
   PentaDiagMatrix *A2 = compute_square_tridiagonal_omp(A, num_threads);
   double end = omp_get_wtime();
   printf("A^2 computed in %f seconds.\n", end - start);
-  log_execution_time("matrix_power2_omp.csv", "omp", n, num_threads,
+  log_execution_time("matrix_power2.csv", "omp", n, num_threads,
                      end - start);
 
   printf("Computing A^3 (OpenMP with %d threads)...\n", num_threads);
@@ -193,7 +193,7 @@ int main() {
   HeptaDiagMatrix *A3 = compute_cube_tridiagonal_omp(A, A2, num_threads);
   end = omp_get_wtime();
   printf("A^3 computed in %f seconds.\n", end - start);
-  log_execution_time("matrix_power3_omp.csv", "omp", n, num_threads,
+  log_execution_time("matrix_power3.csv", "omp", n, num_threads,
                      end - start);
 
   // Cleanup

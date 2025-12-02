@@ -162,12 +162,9 @@ int main(int argc, char **argv) {
               0, MPI_COMM_WORLD);
 
   if (rank == 0) {
-    printf("MPI Matrix Vector Multiplication with %d processes. Time: %f "
-           "seconds\n",
-           size, end_time - start_time);
+    printf("MPI Matrix Vector Multiplication with %d processes. Time: %f " "seconds\n", size, end_time - start_time);
 
-    log_execution_time("matrix_vector_opti.csv", "mpi", n, size,
-                       end_time - start_time);
+    log_execution_time("matrix_vector_opti.csv", "mpi", n, size, end_time - start_time);
 
     // Global Cleanup
     free(vec);
