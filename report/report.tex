@@ -55,7 +55,106 @@
 %        Your abstract.
 %    \end{abstract}
 
-\section{Exercice 1}
+\section{Exercice 1: Series Summation}
+
+\subsection{Objective}
+The objective of this exercise is to calculate the sum of the series for a given integer $n > 1$:
+\begin{equation}
+    S = \sum_{i=1}^{n} \frac{1}{i(i+1)}
+\end{equation}
+We aim to verify the convergence of this series as $n$ increases and to parallelize the computation using OpenMP and MPI. We will then analyze the performance and speedup obtained on a multicore architecture.
+
+\begin{equation}
+    \sum_{i=1}^{n} \frac{1}{i(i+1)} = \sum_{i=1}^{n} \left(\frac{1}{i} - \frac{1}{i+1}\right) = 1 - \frac{1}{n+1} \xrightarrow{n \to \infty} 1
+\end{equation}
+
+\subsection{Implementation}
+
+\subsubsection{Sequential Implementation}
+The sequential version is a straightforward loop summing the terms.
+\begin{lstlisting}[language=C]
+double fn(int i) {
+    return 1.0 / ((double)i * (i + 1));
+}
+
+double sum(int n) {
+    double total = 0;
+    for (int i=1; i<n; i++) {
+        total += fn(i);
+    }
+    return total;
+}
+\end{lstlisting}
+
+\subsubsection{OpenMP Parallelization}
+We parallelized the loop using the \texttt{omp parallel for} directive with a reduction on the \texttt{total} variable to avoid race conditions.
+\begin{lstlisting}[language=C]
+double sum(int n, int nb_threads) {
+    double total = 0;
+    omp_set_num_threads(nb_threads);
+    #pragma omp parallel for reduction(+:total) schedule(static)
+    for (int i=1; i<n; i++) {
+        total += fn(i);
+    }
+    return total;
+}
+\end{lstlisting}
+
+\subsubsection{MPI Parallelization}
+We used a cyclic distribution (stride = size) to distribute the iterations among processes. Each process computes a partial sum, which is then aggregated using \texttt{MPI\_Reduce}.
+\begin{lstlisting}[language=C]
+double sum(int n, int rank, int size) {
+    double local_sum = 0.0;
+    for (int i = rank + 1; i < n; i += size) {
+        local_sum += fn(i);
+    }
+    return local_sum;
+}
+// In main:
+MPI_Reduce(&local_sum, &total_sum, 1, MPI_DOUBLE, MPI_SUM, 0, MPI_COMM_WORLD);
+\end{lstlisting}
+
+\subsection{Experimental Results}
+We executed the program with $N = 1,000,000,000$ to ensure significant execution time and convergence towards 1.
+
+\begin{table}[H]
+    \centering
+    \begin{tabular}{|c|c|c|c|c|}
+        \hline
+        \textbf{Method} & \textbf{Procs/Threads} & \textbf{Time (s)} & \textbf{Speedup} \\
+        \hline
+        Sequential & 1 & 3.470 & Baseline \\
+        \hline
+        OpenMP & 1 & 3.471 & 1.00x \\
+        OpenMP & 2 & 1.777 & 1.95x \\
+        OpenMP & 4 & 0.897 & 3.87x \\
+        OpenMP & 6 & 0.638 & 5.44x \\
+        OpenMP & 8 & 0.568 & 6.11x \\
+        \hline
+        MPI & 1 & 3.489 & 0.99x \\
+        MPI & 2 & 1.766 & 1.96x \\
+        MPI & 4 & 0.898 & 3.86x \\
+        MPI & 6 & 0.615 & 5.64x \\
+        MPI & 8 & 0.543 & 6.39x \\
+        \hline
+    \end{tabular}
+    \caption{Performance results for N=1,000,000,000}
+    \label{tab:ex1_results}
+\end{table}
+
+The experimental results show nearly theoretical linear speedup for both OpenMP and MPI. Since the computation is confusingly parallel with minimal communication (only one reduction at the end), the overhead is negligible. Interestingly, MPI matches or slightly outperforms OpenMP at 8 processes, likely due to efficient process scheduling and memory isolation.
+
+\begin{figure}[H]
+    \centering
+    \includegraphics[width=0.8\textwidth]{img/ex1.png}
+    \caption{Execution time analysis}
+\end{figure}
+
+\begin{figure}[H]
+    \centering
+    \includegraphics[width=0.8\textwidth]{img/ex1_speedup.png}
+    \caption{Speedup analysis}
+\end{figure}
 
 \newpage
 
@@ -148,18 +247,24 @@ for (int i = 0; i < n; i++) {
 
 \vspace{0.5cm}
 
-\begin{tabular}{|c|c|c|c|c|}
-    \hline
-    \textbf{Implementation} & \textbf{Threads} & \textbf{Time (s)} & \textbf{Observation} \\
-    \hline
-    Sequential & 1 & 0.000129 & Baseline \\
-    OpenMP & 1 & 0.001288 & 10x Slower \\
-    OpenMP & 2 & 0.000309 & Slower than Seq \\
-    OpenMP & 4 & 0.000645 & Slower than Seq \\
-    OpenMP & 6 & 0.000190 & Slower than Seq \\
-    OpenMP & 8 & 0.000246 & Slower than seq \\
-    \hline
-\end{tabular}
+\begin{table}[H]
+    \centering
+    \begin{tabular}{|c|c|c|c|c|}
+        \hline
+        \textbf{Implementation} & \textbf{Threads} & \textbf{Time (s)} & \textbf{Observation} \\
+        \hline
+        Sequential & 1 & 0.000129 & Baseline \\
+        \hline
+        OpenMP & 1 & 0.001288 & 10x Slower \\
+        OpenMP & 2 & 0.000309 & Slower than Seq \\
+        OpenMP & 4 & 0.000645 & Slower than Seq \\
+        OpenMP & 6 & 0.000190 & Slower than Seq \\
+        OpenMP & 8 & 0.000246 & Slower than Seq \\
+        \hline
+    \end{tabular}
+    \caption{Performance results (N=10,000)}
+    \label{tab:naive_results}
+\end{table}
 
 
 \begin{figure}[H]
@@ -243,21 +348,28 @@ if (rank < size - 1) {
 
 
 
-\begin{tabular}{|c|c|c|c|c|}
-    \hline
-    \textbf{Implementation} & \textbf{Threads} & \textbf{Time (s)} & \textbf{Speedup} \\
-    \hline
-    Sequential & 1 & 0.380672 & Baseline \\
-    OpenMP & 2 & 0.221757 & 1.7x Speedup \\
-    OpenMP & 4 & 0.119725 & 3.2x Speedup \\
-    OpenMP & 6 & 0.080580 & 4.7x Speedup \\
-    OpenMP & 8 & 0.078778 & 4.8x Speedup \\
-    MPI & 2 & 0.396344 & 0.9x Speedup \\
-    MPI & 4 & 0.279268 & 1.4x Speedup \\
-    MPI & 6 & 0.242146 & 1.6x Speedup \\
-    MPI & 8 & 0.275798 & 1.4x Speedup \\
-    \hline
-\end{tabular}
+\begin{table}[H]
+    \centering
+    \begin{tabular}{|c|c|c|c|c|}
+        \hline
+        \textbf{Implementation} & \textbf{Threads} & \textbf{Time (s)} & \textbf{Speedup} \\
+        \hline
+        Sequential & 1 & 0.380672 & Baseline \\
+        \hline
+        OpenMP & 2 & 0.221757 & 1.7x Speedup \\
+        OpenMP & 4 & 0.119725 & 3.2x Speedup \\
+        OpenMP & 6 & 0.080580 & 4.7x Speedup \\
+        OpenMP & 8 & 0.078778 & 4.8x Speedup \\
+        \hline
+        MPI & 2 & 0.396344 & 0.9x Speedup \\
+        MPI & 4 & 0.279268 & 1.4x Speedup \\
+        MPI & 6 & 0.242146 & 1.6x Speedup \\
+        MPI & 8 & 0.275798 & 1.4x Speedup \\
+        \hline
+    \end{tabular}
+    \caption{Performance results optimized (N=100,000,000)}
+    \label{tab:opt_results}
+\end{table}
 
 \begin{figure}[H]
     \centering
@@ -328,17 +440,23 @@ We measured the execution time for computing $A^2$ and $A^3$ with varying number
 
 \textbf{Results for $A^2$:}
 
-\begin{tabular}{|c|c|c|c|}
-    \hline
-    \textbf{Implementation} & \textbf{Threads} & \textbf{Time (s)} & \textbf{Speedup} \\
-    \hline
-    Sequential & 1 & 1.239 & Baseline \\
-    OpenMP & 2 & 0.747 & 1.65x \\
-    OpenMP & 4 & 0.383 & 3.23x \\
-    OpenMP & 6 & 0.277 & 4.47x \\
-    OpenMP & 8 & 0.290 & 4.27x \\
-    \hline
-\end{tabular}
+\begin{table}[H]
+    \centering
+    \begin{tabular}{|c|c|c|c|}
+        \hline
+        \textbf{Implementation} & \textbf{Threads} & \textbf{Time (s)} & \textbf{Speedup} \\
+        \hline
+        Sequential & 1 & 1.239 & Baseline \\
+        \hline
+        OpenMP & 2 & 0.747 & 1.65x \\
+        OpenMP & 4 & 0.383 & 3.23x \\
+        OpenMP & 6 & 0.277 & 4.47x \\
+        OpenMP & 8 & 0.290 & 4.27x \\
+        \hline
+    \end{tabular}
+    \caption{Performance constants for $A^2$}
+    \label{tab:a2_results}
+\end{table}
 
 \begin{figure}[H]
     \centering
@@ -349,17 +467,23 @@ We measured the execution time for computing $A^2$ and $A^3$ with varying number
 
 \textbf{Results for $A^3$:}
 
-\begin{tabular}{|c|c|c|c|}
-    \hline
-    \textbf{Implementation} & \textbf{Threads} & \textbf{Time (s)} & \textbf{Speedup} \\
-    \hline
-    Sequential & 1 & 8.143 & Baseline \\
-    OpenMP & 2 & 3.939 & 2.06x \\
-    OpenMP & 4 & 2.028 & 4.01x \\
-    OpenMP & 6 & 1.469 & 5.54x \\
-    OpenMP & 8 & 1.272 & 6.40x \\
-    \hline
-\end{tabular}
+\begin{table}[H]
+    \centering
+    \begin{tabular}{|c|c|c|c|}
+        \hline
+        \textbf{Implementation} & \textbf{Threads} & \textbf{Time (s)} & \textbf{Speedup} \\
+        \hline
+        Sequential & 1 & 8.143 & Baseline \\
+        \hline
+        OpenMP & 2 & 3.939 & 2.06x \\
+        OpenMP & 4 & 2.028 & 4.01x \\
+        OpenMP & 6 & 1.469 & 5.54x \\
+        OpenMP & 8 & 1.272 & 6.40x \\
+        \hline
+    \end{tabular}
+    \caption{Performance constants for $A^3$}
+    \label{tab:a3_results}
+\end{table}
 
 \begin{figure}[H]
     \centering
@@ -371,5 +495,146 @@ We measured the execution time for computing $A^2$ and $A^3$ with varying number
 \subsubsection{Analysis}
 For $A^2$, we observe good scalability up to 6 threads. At 8 threads, performance slightly degrades, likely due to memory bandwidth saturation, as the arithmetic intensity of $A^2$ is relatively low.
 For $A^3$, which involves more arithmetic operations per element (multiplying tridiagonal by pentadiagonal), the scalability is better, achieving a 6.4x speedup on 8 threads. This suggests that the more computationally intensive the kernel, the better the parallel efficiency on this hardware.
+
+
+\subsection{Analysis of mpi\_mat\_vect\_mult.c}
+
+\textbf{Question:} What does the attached program \texttt{mpi\_mat\_vect\_mult.c} do? Adapt the program to do the proposed product A by a random vector.
+
+\textbf{Analysis:}
+The provided program implements a parallel dense matrix-vector multiplication ($y = Ax$) using MPI.
+\begin{itemize}
+    \item \textbf{Data Distribution:} The matrix $A$ is distributed by block rows (each process owns $N/P$ rows). The vectors $x$ and $y$ are distributed by blocks (each process owns $N/P$ elements).
+    \item \textbf{Algorithm:} 
+    \begin{enumerate}
+        \item Rank 0 reads the dimensions, matrix, and vector from standard input.
+        \item \texttt{MPI\_Scatter} distributes the matrix rows and vector elements to all processes.
+        \item \texttt{MPI\_Allgather} is used to gather the entire vector $x$ on every process. This is necessary because, in a dense matrix-vector product, computing a single element $y_i$ requires the dot product of row $i$ with the entire vector $x$.
+        \item Each process computes its local portion of $y$.
+        \item \texttt{MPI\_Gather} collects the results back to Rank 0 for printing.
+    \end{enumerate}
+\end{itemize}
+
+\textbf{Adaptation:}
+We adapted the program to perform the multiplication of the specific tridiagonal matrix $A$ (from the project) by a random vector.
+\begin{itemize}
+    \item Instead of reading from standard input, we implemented \texttt{Generate\_matrix} and \texttt{Generate\_vector} functions to generate the data directly in memory.
+    \item We maintained the dense storage format ($O(N^2)$) as per the original code structure, although this is inefficient for our sparse matrix.
+    \item We added \texttt{MPI\_Wtime()} calls to measure the execution time.
+\end{itemize}
+
+\textbf{Performance:}
+For $N=10,000$ on 4 processes, the execution time was approximately \textbf{0.105 seconds}. This confirms that the dense approach involves significant overhead (communication of the full vector and $O(N^2)$ operations) compared to the optimized sparse implementation ($< 0.001$ s).
+
+
+\newpage
+
+\section{Exercice 3}
+
+\subsection{Objective}
+The goal of this exercise is to:
+\begin{enumerate}
+    \item Define a C structure to represent a 3D point.
+    \item Implement a function to generate a collection of random 3D points.
+    \item Write an MPI program where Process 2 generates these points and sends them to Process 0.
+\end{enumerate}
+
+\subsection{Implementation}
+
+\subsubsection{Data Structure and Generation}
+We defined a \texttt{Point3D} structure containing three doubles ($x, y, z$). The generation function allocates memory for $N$ points and initializes them with random values between 0 and 100.
+
+\begin{lstlisting}[language=C]
+typedef struct {
+    double x;
+    double y;
+    double z;
+} Point3D;
+
+Point3D* generate_points(int n) {
+    Point3D* points = (Point3D*) malloc(n * sizeof(Point3D));
+    for (int i = 0; i < n; i++) {
+        points[i].x = ((double)rand() / RAND_MAX) * 100.0;
+        points[i].y = ((double)rand() / RAND_MAX) * 100.0;
+        points[i].z = ((double)rand() / RAND_MAX) * 100.0;
+    }
+    return points;
+}
+\end{lstlisting}
+
+\subsubsection{MPI Communication}
+To send an array of structures efficiently, we defined a derived MPI datatype using \texttt{MPI\_Type\_contiguous}. This allows us to treat a \texttt{Point3D} struct as a single MPI element consisting of 3 doubles.
+
+\begin{lstlisting}[language=C]
+// Create MPI Datatype for Point3D
+MPI_Datatype mpi_point_type;
+MPI_Type_contiguous(3, MPI_DOUBLE, &mpi_point_type);
+MPI_Type_commit(&mpi_point_type);
+\end{lstlisting}
+
+The communication logic is straightforward:
+\begin{itemize}
+    \item \textbf{Rank 2:} Generates the points and sends them using \texttt{MPI\_Send}.
+    \item \textbf{Rank 0:} Allocates memory and receives the points using \texttt{MPI\_Recv}.
+\end{itemize}
+
+\begin{lstlisting}[language=C]
+if (rank == 2) {
+    Point3D* points = generate_points(n_points);
+    MPI_Send(points, n_points, mpi_point_type, 0, 0, MPI_COMM_WORLD);
+} else if (rank == 0) {
+    Point3D* received_points = (Point3D*) malloc(n_points * sizeof(Point3D));
+    MPI_Recv(received_points, n_points, mpi_point_type, 2, 0, MPI_COMM_WORLD, MPI_STATUS_IGNORE);
+}
+\end{lstlisting}
+
+\subsection{Execution Results}
+Running the program with 3 processes confirms the successful transmission of data.
+
+\begin{verbatim}
+Rank 2: Generating 10 3D points...
+Rank 2: Sending points to Rank 0...
+Rank 0: Waiting for points from Rank 2...
+Rank 0: Received points:
+Point 0: (44.79, 35.14, 27.44)
+Point 1: (90.25, 48.34, 13.32)
+...
+\end{verbatim}
+
+This demonstrates how to handle custom data structures in MPI using derived datatypes, ensuring portable and efficient communication.
+
+
+\newpage
+
+\section{Summary of the Article}
+
+The article presents a parallel numerical method for solving the two-dimensional heat equation, a fundamental partial differential equation describing how heat diffuses over time in a physical domain. Because analytical solutions are rarely available, the author focuses on numerical approximations using a combination of finite difference methods, spectral Fourier methods, and high-performance parallel computing tools.
+
+The study compares several parallelization techniques, mainly MPI (Message Passing Interface) for distributed CPU computation and CUDA for GPU computation. It also integrates the FFTW library, which efficiently computes the Fast Fourier Transform (FFT), a crucial step in spectral approaches for PDEs.
+
+The article begins by explaining how FFTW (and its GPU version CUFFT) accelerates the computation of Fourier transforms, which convert the heat equation into a set of independent ordinary differential equations in spectral space. The author uses two time-integration schemes: the Forward Euler method, which is simple but less accurate, and the fourth-order Runge–Kutta method (RK4), which offers higher accuracy and stability. Figures in the article (Figure 2) show that RK4 reduces numerical error dramatically compared to Euler’s method.
+
+A substantial section of the paper describes GPU architecture (Figure 3) and the CUDA programming model based on grids, blocks, and threads (Figure 4). CUDA enables massive parallelism by running thousands of threads simultaneously, which suits the repetitive, local computations typical of numerical PDE solvers. Algorithm 1 presents how the heat equation is solved using finite differences on CUDA, while Algorithm 2 shows the spectral RK4 method implemented with CUFFT.
+
+The article then demonstrates how sparse matrix storage formats, especially CSR (Compressed Sparse Row), drastically improve performance during matrix–vector multiplications required by RK4. Figure 6 illustrates that runtime decreases as the number of threads increases when using CSR.
+
+Multiple numerical tests compare CUDA and MPI. Table 1 shows that GPU computation of the FFT is up to 6$\times$ faster than CPU execution for large vectors. Additional figures (7 and 8) show the speed-up and accuracy of the FFTW algorithm on GPU versus MPI. Later tests (Table 2) reveal that GPU execution of the 2D heat equation is up to 100$\times$ faster than MPI for large meshes.
+
+Finally, the article validates the physical behavior of solutions: Figure 9 shows the evolution of a random initial temperature field into a smoother distribution due to diffusion, and Figure 10 shows that parallel performance (speed-up) scales well up to 64 processors in an MPI setting.
+
+The conclusion emphasizes that CUDA significantly outperforms MPI, especially for high-resolution grids, due to faster memory access and better parallelization capability. The author plans to extend this work to Navier–Stokes equations, using a similar GPU-accelerated spectral approach.
+
+\subsection{Our understanding of this article}
+
+From this article, we understood that the main objective is to accelerate the numerical solution of the 2D heat equation by using modern parallel computing tools. Solving this equation on large grids requires performing millions of repetitive calculations, which is slow on a traditional CPU. This is why the author compares two parallel approaches: MPI on CPUs and CUDA on GPUs.
+
+We understood that GPUs are much more efficient because they can run thousands of threads simultaneously and have a much higher memory bandwidth. The article shows that GPU computations, especially when using CUFFT for fast Fourier transforms, are up to 100 times faster than MPI implementations in some tests.
+
+We also understood that the author uses spectral methods based on FFTs to transform the heat equation into simpler equations, and that the fourth-order Runge–Kutta method (RK4) provides high accuracy for time integration.
+
+Overall, we learned that choosing the right computing architecture is essential when solving large scientific problems. The study clearly demonstrates that CUDA GPUs offer superior performance, making them highly suitable for numerical simulations like the heat equation.
+
+
+
 
 \end{document}
