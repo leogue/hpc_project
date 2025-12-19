@@ -37,9 +37,11 @@
         {\Huge \bfseries HPC Project\par}
         \vspace{0.7cm}
         {\large High Performance Computing\par}
+        \vspace{0.7cm}
+        {\large \url{https://github.com/leogue/hpc_project}\par}
         \vfill
         {\large\textbf{Authors:}}\par
-        {\large HABAGNO Antonin\par
+        {\large CHABAGNO Antonin\par
         Léo GUERIN\par}
         \vspace{2cm}
         {\large\textbf{Date:}}\par
@@ -55,7 +57,7 @@
 %        Your abstract.
 %    \end{abstract}
 
-\section{Exercice 1: Series Summation}
+\section{Exercise 1: Series Summation}
 
 \subsection{Objective}
 The objective of this exercise is to calculate the sum of the series for a given integer $n > 1$:
@@ -142,8 +144,6 @@ We executed the program with $N = 1,000,000,000$ to ensure significant execution
     \label{tab:ex1_results}
 \end{table}
 
-The experimental results show nearly theoretical linear speedup for both OpenMP and MPI. Since the computation is confusingly parallel with minimal communication (only one reduction at the end), the overhead is negligible. Interestingly, MPI matches or slightly outperforms OpenMP at 8 processes, likely due to efficient process scheduling and memory isolation.
-
 \begin{figure}[H]
     \centering
     \includegraphics[width=0.8\textwidth]{img/ex1.png}
@@ -156,15 +156,21 @@ The experimental results show nearly theoretical linear speedup for both OpenMP 
     \caption{Speedup analysis}
 \end{figure}
 
+The experimental results show nearly theoretical linear speedup for both OpenMP and MPI up to 6 processes. Since the computation is embarrassingly parallel with minimal communication (only one reduction at the end), the overhead is negligible. Interestingly, MPI matches or slightly outperforms OpenMP at 8 processes.
+
+However, a noticeable deviation from the ideal speedup curve is observed when scaling from 6 to 8 processes. This behavior is likely attributed to the specific hardware architecture used for these benchmarks. The tests were executed on a machine equipped with an Apple Silicon M1 processor featuring a heterogeneous multicore architecture.
+
+This specific processor configuration consists of 8 physical cores in total: 6 "Performance" cores and 2 "Efficiency" cores. Up to 6 processes, the operating system is able to schedule the workload exclusively on the high-performance cores, resulting in linear scaling. When the number of processes increases to 8, the system is forced to utilize the two efficiency cores. As these cores are designed for power saving rather than maximum computational throughput (lower clock speeds and different micro-architecture), they introduce a bottleneck relative to the performance cores. Consequently, the average execution speed per core decreases, preventing the total speedup from following the linear trend beyond 6 processes.
+
 \newpage
 
-\section{Exercice 2}
+\section{Exercise 2}
 
 \subsection{Matrix-vector product}
 
 \subsubsection{Introduction}
 
-The objective of this exercice is to analyze the performance characteristics of Matrix-Vector Multiplication specifically for tridiagonal matrices. We will implement a sequential baseline, parallelize it using OpenMP and MPI, and analyze the impact of the number of threads and processes on the execution time.
+The objective of this exercise is to analyze the performance characteristics of Matrix-Vector Multiplication specifically for tridiagonal matrices. We will implement a sequential baseline, parallelize it using OpenMP and MPI, and analyze the impact of the number of threads and processes on the execution time.
 
 A tridiagonal matrix is a sparse matrix where non-zero elements exist only on the main diagonal, the super-diagonal, and the sub-diagonal.
 
@@ -270,7 +276,7 @@ for (int i = 0; i < n; i++) {
 \begin{figure}[H]
     \centering
     \includegraphics[width=0.8\textwidth]{img/matrix_vector_naive.png}
-    \caption{Times in function of the number of threads / procs}
+    \caption{Execution time vs number of threads / procs}
     \label{fig:omp_mpi}
 \end{figure}
 
@@ -382,7 +388,7 @@ if (rank < size - 1) {
 Contrary to OpenMP, the MPI implementation shows poor performance on a single shared-memory machine.
 
 \begin{enumerate}
-\item Communication Overhead: The operations $ MPI\_Scatterv $ and $ MPI\_Gatherv $ require Rank 0 to serialize and transmit the entire dataset (approx 1.2 GB for N=108) to other processes. In a shared-memory context, this involves expensive memory-to-memory copies that are slower than direct pointer access used in OpenMP.
+\item Communication Overhead: The operations $ MPI\_Scatterv $ and $ MPI\_Gatherv $ require Rank 0 to serialize and transmit the entire dataset (approx 1.2 GB for $N=10^8$) to other processes. In a shared-memory context, this involves expensive memory-to-memory copies that are slower than direct pointer access used in OpenMP.
 \item Computation-to-Communication Ratio: The matrix-vector product is an O(N) operation with very few arithmetic operations per byte loaded. The time saved by parallelizing the calculation is overshadowed by the time spent distributing the data.
 \end{enumerate}
 
@@ -529,7 +535,7 @@ For $N=10,000$ on 4 processes, the execution time was approximately \textbf{0.10
 
 \newpage
 
-\section{Exercice 3}
+\section{Exercise 3}
 
 \subsection{Objective}
 The goal of this exercise is to:
